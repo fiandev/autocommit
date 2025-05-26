@@ -12,8 +12,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/tfkhdyt/geminicommit/cmd/config"
-	"github.com/tfkhdyt/geminicommit/internal/delivery/cli/handler"
+	"github.com/fiandev/autocommit/cmd/config"
+	"github.com/fiandev/autocommit/internal/delivery/cli/handler"
 )
 
 var (
@@ -27,6 +27,7 @@ var (
 	dryRun      = false
 	showDiff    = false
 	maxLength   = 72
+	aiProvider  = ""
 	language    = "english"
 	issue       string
 	noVerify    = false
@@ -52,6 +53,7 @@ var RootCmd = &cobra.Command{
 		&dryRun,
 		&showDiff,
 		&maxLength,
+		&aiProvider,
 		&language,
 		&issue,
 		&noVerify,

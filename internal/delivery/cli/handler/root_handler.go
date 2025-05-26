@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/tfkhdyt/geminicommit/internal/usecase"
+	"github.com/fiandev/autocommit/internal/usecase"
 )
 
 type RootHandler struct {
@@ -43,12 +43,30 @@ func (r *RootHandler) RootCommand(
 	dryRun *bool,
 	showDiff *bool,
 	maxLength *int,
+	aiProvider *string,
 	language *string,
 	issue *string,
 	noVerify *bool,
 ) func(*cobra.Command, []string) {
 	return func(_ *cobra.Command, _ []string) {
 		modelFromConfig := viper.GetString("api.model")
+		aiProviderConfig := viper.GetString("ai.provider")
+
+		if aiProviderConfig == "" {
+			fmt.Println(
+				"Error: You need to choose AI provider, run this command to set AI Provider",
+			)
+
+			fmt.Print("\n")
+			color.New(color.Bold).Print("geminicommit config provider set ")
+			// color.New(color.Italic, color.Bold).Print("provider\n\n")
+			os.Exit(1)
+		}
+
+		if aiProviderConfig != "" {
+			*aiProvider = aiProviderConfig
+		}
+
 		if modelFromConfig != "" && *model == "gemini-2.0-flash" {
 			*model = modelFromConfig
 		}

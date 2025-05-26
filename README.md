@@ -27,7 +27,7 @@
 
 ```sh
 # 1. Install (Go required)
-go install github.com/tfkhdyt/geminicommit@latest
+go install github.com/fiandev/autocommit@latest
 
 # 2. Get your Gemini API key
 #    https://aistudio.google.com/app/apikey
@@ -48,10 +48,10 @@ gmc
 
 - **From Source:**
   ```sh
-  go install github.com/tfkhdyt/geminicommit@latest
+  go install github.com/fiandev/autocommit@latest
   ```
 - **Standalone Binary:**
-  Download from the [releases page](https://github.com/tfkhdyt/geminicommit/releases) and move to a directory in your `PATH`:
+  Download from the [releases page](https://github.com/fiandev/autocommit/releases) and move to a directory in your `PATH`:
   - Linux: `$HOME/.local/bin/` or `/usr/local/bin/`
   - Windows: `%LocalAppData%\Programs\`
   - macOS: `/usr/local/bin/`
