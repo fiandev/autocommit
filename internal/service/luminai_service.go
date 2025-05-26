@@ -1,26 +1,32 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
 	"fmt"
+	"io"
+	"log"
+	"net/http"
 	"strings"
 	"sync"
 
 	"github.com/charmbracelet/huh/spinner"
 	"github.com/fatih/color"
 	"google.golang.org/genai"
+
+	"encoding/json"
 )
 
-//go:embed prompts/system_prompt.md
-var systemPrompt string
+//go:embed prompts/luminai_prompt.md
+var luminaiPrompt string
 
-type GeminiService struct {
-	systemPrompt string
+type LuminaiService struct {
+	luminaiPrompt string
 }
 
-// CommitOptions contains options for commit generation
-type CommitOptions struct {
+// LuminaiCommitOptions contains options for commit generation
+type LuminaiCommitOptions struct {
 	StageAll    *bool
 	UserContext *string
 	Model       *string
@@ -35,8 +41,8 @@ type CommitOptions struct {
 	NoVerify    *bool
 }
 
-// PreCommitData contains data about the changes to be committed
-type PreCommitData struct {
+// LuminaiPreCommitData contains data about the changes to be committed
+type LuminaiPreCommitData struct {
 	Files        []string
 	Diff         string
 	RelatedFiles map[string]string
@@ -44,26 +50,26 @@ type PreCommitData struct {
 }
 
 var (
-	geminiService *GeminiService
-	geminiOnce    sync.Once
+	luminaiService *LuminaiService
+	luminaiOnce    sync.Once
 )
 
-func NewGeminiService() *GeminiService {
-	geminiOnce.Do(func() {
-		geminiService = &GeminiService{
-			systemPrompt: systemPrompt,
+func NewLuminaiService() *LuminaiService {
+	luminaiOnce.Do(func() {
+		luminaiService = &LuminaiService{
+			luminaiPrompt: luminaiPrompt,
 		}
 	})
 
-	return geminiService
+	return luminaiService
 }
 
 // GenerateCommitMessage creates a commit message using AI analysis with UI feedback
-func (g *GeminiService) GenerateCommitMessage(
+func (g *LuminaiService) GenerateCommitMessage(
 	client *genai.Client,
 	ctx context.Context,
-	data *PreCommitData,
-	opts *CommitOptions,
+	data *LuminaiPreCommitData,
+	opts *LuminaiCommitOptions,
 ) (string, error) {
 	messageChan := make(chan string, 1)
 
@@ -95,11 +101,11 @@ func (g *GeminiService) GenerateCommitMessage(
 }
 
 // analyzeToChannel performs the actual AI analysis and sends result to channel
-func (g *GeminiService) analyzeToChannel(
+func (g *LuminaiService) analyzeToChannel(
 	client *genai.Client,
 	ctx context.Context,
-	data *PreCommitData,
-	opts *CommitOptions,
+	data *LuminaiPreCommitData,
+	opts *LuminaiCommitOptions,
 	messageChan chan string,
 ) {
 	message, err := g.AnalyzeChanges(
@@ -120,7 +126,7 @@ func (g *GeminiService) analyzeToChannel(
 	}
 }
 
-func (g *GeminiService) GetUserPrompt(
+func (g *LuminaiService) GetUserPrompt(
 	context *string,
 	diff string,
 	files []string,
@@ -162,7 +168,7 @@ Requirements:
 	return prompt, nil
 }
 
-func (g *GeminiService) AnalyzeChanges(
+func (g *LuminaiService) AnalyzeChanges(
 	geminiClient *genai.Client,
 	ctx context.Context,
 	diff string,
@@ -186,47 +192,53 @@ func (g *GeminiService) AnalyzeChanges(
 	}
 
 	// Update system prompt to include language and length requirements
-	enhancedSystemPrompt := g.systemPrompt
+	enhancedluminaiPrompt := g.luminaiPrompt
 	if *language != "english" {
-		enhancedSystemPrompt += fmt.Sprintf("\n\nIMPORTANT: Generate the commit message in %s language.", *language)
+		enhancedluminaiPrompt += fmt.Sprintf("\n\nIMPORTANT: Generate the commit message in %s language.", *language)
 	}
-	enhancedSystemPrompt += fmt.Sprintf("\n\nIMPORTANT: Keep the commit message under %d characters.", *maxLength)
+	enhancedluminaiPrompt += fmt.Sprintf("\n\nIMPORTANT: Keep the commit message under %d characters.", *maxLength)
 	if *issue != "" {
-		enhancedSystemPrompt += fmt.Sprintf("\n\nIMPORTANT: Reference issue %s in the commit message.", *issue)
+		enhancedluminaiPrompt += fmt.Sprintf("\n\nIMPORTANT: Reference issue %s in the commit message.", *issue)
 	}
 
-	temp := float32(0.2)
-	resp, err := geminiClient.Models.GenerateContent(ctx, *modelName, genai.Text(userPrompt), &genai.GenerateContentConfig{
-		Temperature: &temp,
-		SafetySettings: []*genai.SafetySetting{
-			{
-				Category:  genai.HarmCategoryHarassment,
-				Threshold: genai.HarmBlockThresholdBlockNone,
-			},
-			{
-				Category:  genai.HarmCategoryHateSpeech,
-				Threshold: genai.HarmBlockThresholdBlockNone,
-			},
-			{
-				Category:  genai.HarmCategoryDangerousContent,
-				Threshold: genai.HarmBlockThresholdBlockNone,
-			},
-			{
-				Category:  genai.HarmCategorySexuallyExplicit,
-				Threshold: genai.HarmBlockThresholdBlockNone,
-			},
-		},
-		SystemInstruction: &genai.Content{
-			Role:  genai.RoleModel,
-			Parts: []*genai.Part{{Text: enhancedSystemPrompt}},
-		},
-	})
+	url := "https://luminai.my.id/"
+
+	payload := map[string]interface{}{
+		"prompt":  "",
+		"content": userPrompt,
+		"user":    "",
+	}
+
+	jsonData, err := json.Marshal(payload)
+
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Fatalf("Request gagal: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Baca response body
+	body, err := io.ReadAll(resp.Body)
+
 	if err != nil {
 		fmt.Println("Error:", err)
 		return "", nil
 	}
 
-	result := resp.Candidates[0].Content.Parts[0].Text
+	var responseData struct {
+		result string `json:"result"`
+	}
+
+	err = json.Unmarshal(body, &responseData)
+	if err != nil {
+		log.Fatalf("Gagal decode JSON response: %v", err)
+	}
+
+	result := responseData.result
 	result = strings.ReplaceAll(result, "```", "")
 	result = strings.TrimSpace(result)
 
